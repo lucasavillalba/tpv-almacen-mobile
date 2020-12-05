@@ -1,4 +1,4 @@
-name: tpv_almacen_mobile
+name: tpv_almacen_barcode_scanner
 description: Mobile application for barcode scanner for TPV Almacen project.
 
 # The following line prevents the package from being accidentally published to
