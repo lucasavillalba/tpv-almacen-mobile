@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -8,6 +9,20 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   
   final formKey = GlobalKey<FormState>();
+  String value ="";
+
+  Future _scanBarcode() async{
+   
+    String barcode = await FlutterBarcodeScanner.scanBarcode("#004297", "Cancelar", false, ScanMode.BARCODE);
+    setState(() {
+      if(barcode == '-1'){
+        value = "";
+        return;
+      }
+      value = barcode;
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +42,7 @@ class _HomePageState extends State<HomePage> {
                 _createDescription(),
                 _createPrice(),
                 _createSaveProductButton(context),
-                SizedBox(height: MediaQuery.of(context).size.height*0.35),
+                SizedBox(height: MediaQuery.of(context).size.height*0.32),
                 _createScanButton(context),
               ],
             ),
@@ -41,7 +56,7 @@ class _HomePageState extends State<HomePage> {
     return Container(
       margin: EdgeInsets.only(bottom:30.0),
       child: Text(
-          "7790070412348",
+          value,
           textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 40.0
@@ -98,15 +113,16 @@ class _HomePageState extends State<HomePage> {
  Widget _createSaveProductButton(BuildContext context) {
     return RaisedButton(
       shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.blue),
         borderRadius: BorderRadius.circular(5.0)
         ),
       onPressed: () => {},
       padding: EdgeInsets.all(10.0),
-      color: Colors.blue,
+      color: Colors.white,
         child: Text('Guardar', 
           style: TextStyle(
             fontSize: 18, 
-            color: Colors.white,
+            color: Colors.blue,
             )
         )
         );
@@ -116,8 +132,9 @@ class _HomePageState extends State<HomePage> {
     return RaisedButton.icon(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(5.0)
+
         ),
-      onPressed: () => {},
+      onPressed: () => _scanBarcode(),
       padding: EdgeInsets.all(10.0),
       color: Colors.blue,
         icon: Icon(Icons.settings_overscan, color: Colors.white),
