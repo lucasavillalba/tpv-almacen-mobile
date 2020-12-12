@@ -14,8 +14,8 @@ class ProductModel {
 
     String barcode;
     String description;
-    int costprice;
-    int salesprice;
+    double costprice;
+    double salesprice;
 
     factory ProductModel.fromJson(Map<String, dynamic> json) => ProductModel(
         barcode: json["barcode"],
