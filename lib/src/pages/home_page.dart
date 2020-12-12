@@ -36,6 +36,7 @@ class _HomePageState extends State<HomePage> {
       }
       _barcode = barcode;
       product.barcode = barcode;
+      myFocusNode.requestFocus();
     });
   }
 
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> {
       body: Center(
         child: Container(
           height: MediaQuery.of(context).size.height*0.8,
-          width: 300.0,
+          width: 350.0,
           child: Form(
             key: _formKey,
             child: ListView(
@@ -98,6 +99,8 @@ class _HomePageState extends State<HomePage> {
    return Container(
       margin: EdgeInsets.only(bottom: 30.0),
       child: TextFormField(
+        focusNode: myFocusNode,
+        textInputAction: TextInputAction.next,
         controller: _descriptionController,
         decoration: InputDecoration(
           labelText: "Descripción",
@@ -191,7 +194,6 @@ class _HomePageState extends State<HomePage> {
 
   _productProvider.createProduct(context, product).then((value) {
   if (  value == true ){
-      //TODO: Clear inputs fields 
       clearTextInput();
       setState(() {
         product = new ProductModel();
