@@ -101,6 +101,7 @@ class _HomePageState extends State<HomePage> {
       child: TextFormField(
         focusNode: myFocusNode,
         textInputAction: TextInputAction.next,
+        textCapitalization: TextCapitalization.characters,
         controller: _descriptionController,
         decoration: InputDecoration(
           labelText: "Descripción",
