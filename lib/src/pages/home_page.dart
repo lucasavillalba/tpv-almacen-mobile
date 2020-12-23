@@ -2,20 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:tpv_almacen_barcode_scanner/src/models/product_model.dart';
 import 'package:tpv_almacen_barcode_scanner/src/providers/product_provider.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  FocusNode myFocusNode;
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  FocusNode scanButtonFocus;
+  FocusNode descriptionTextFieldFocus;
   final _formKey = GlobalKey<FormState>();
   final _productProvider = new ProductProvider();
 
   ProductModel product = new ProductModel();
 
   String _barcode ="";
+  bool _isPressed = false, _animatingReveal = false;
+  int _buttonSaveState = 0;
+  double _buttonSaveWith = double.infinity;
+  Animation _animation;
+  GlobalKey _buttonKey = GlobalKey();
+  bool _isButtonDisabled = true;
 
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
@@ -36,7 +44,7 @@ class _HomePageState extends State<HomePage> {
       }
       _barcode = barcode;
       product.barcode = barcode;
-      myFocusNode.requestFocus();
+      descriptionTextFieldFocus.requestFocus();
     });
   }
 
@@ -44,16 +52,30 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    myFocusNode = FocusNode();
+    scanButtonFocus = FocusNode();
+    descriptionTextFieldFocus = FocusNode();
+
+    _descriptionController.addListener(_enableSaveButton);
+    _priceController.addListener(_enableSaveButton);
   }
 
    @override
   void dispose() {
     // Clean up the focus node when the Form is disposed.
-    myFocusNode.dispose();
-
+    scanButtonFocus.dispose();
+    descriptionTextFieldFocus.dispose();
+    
+    _priceController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
+  
+  @override
+  void deactivate() {
+    reset();
+    super.deactivate();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(  
@@ -63,7 +85,7 @@ class _HomePageState extends State<HomePage> {
       body: Center(
         child: Container(
           height: MediaQuery.of(context).size.height*0.8,
-          width: 350.0,
+          padding: EdgeInsets.symmetric(horizontal: 20.0),
           child: Form(
             key: _formKey,
             child: ListView(
@@ -99,7 +121,7 @@ class _HomePageState extends State<HomePage> {
    return Container(
       margin: EdgeInsets.only(bottom: 30.0),
       child: TextFormField(
-        focusNode: myFocusNode,
+        focusNode: descriptionTextFieldFocus,
         textInputAction: TextInputAction.next,
         textCapitalization: TextCapitalization.characters,
         controller: _descriptionController,
@@ -111,15 +133,12 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         onSaved: ( value ) => { product.description = value },
-        validator: ( descriptionValue ){
+        validator: ( descriptionValue ) {
           if (descriptionValue.isEmpty ){
             return 'Ingrese descripción';
           }
           return null;
-        },
-        onChanged: ( descriptionValue ) => setState(() {
-          product.description = descriptionValue;
-          })
+        }, 
       ),
     );
   }
@@ -129,6 +148,7 @@ class _HomePageState extends State<HomePage> {
         margin: EdgeInsets.only(bottom: 30.0),
         child: TextFormField(
           keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
           controller: _priceController,
           decoration: InputDecoration(
             labelText: "Precio",
@@ -138,7 +158,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           onSaved: ( value ) => {
-            product.salesprice = double.parse(value)
+            product.salesprice =  product.costprice = double.parse(value)
            },
           validator: ( priceValue ){
             if (priceValue.isEmpty ){
@@ -146,36 +166,43 @@ class _HomePageState extends State<HomePage> {
             }
               return null;
           },
-          onChanged: ( priceValue ) => setState(() {
-            product.costprice = double.parse(priceValue);
-            product.salesprice = double.parse(priceValue);
-            })
         ),
       );
     }
 
  Widget _createSaveProductButton(BuildContext context) {
-    return RaisedButton(
-      autofocus: true,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Colors.blue),
-        borderRadius: BorderRadius.circular(5.0)
-        ),
-      onPressed: () => _submit(context),
-      padding: EdgeInsets.all(10.0),
-      color: Colors.white,
-        child: Text('Guardar', 
-          style: TextStyle(
-            fontSize: 18, 
-            color: Colors.blue,
-            )
-        )
-        );
+    return Center(
+      child: Container(
+        width: _buttonSaveWith,
+        child: RaisedButton(
+          key: _buttonKey,
+          child: buildButtonChild(),
+          elevation: calculateElevation(),
+          onHighlightChanged: (isPressed){
+            setState((){
+              _isPressed = isPressed;
+              if (_buttonSaveState == 0 ){
+                _animateButton();
+              }
+              });
+          },
+          shape: RoundedRectangleBorder(
+            side: _buttonSaveState == 2 ? BorderSide(color: Colors.green) : _isButtonDisabled == true ? BorderSide(color: Colors.grey[500]) : BorderSide(color: Colors.blue),
+            borderRadius: BorderRadius.circular(5.0)
+            ),
+          onPressed: _isButtonDisabled == true ? null : () => _submit(context),
+          padding: EdgeInsets.all(0.0),
+          color: _buttonSaveState == 2 ? Colors.green : Colors.blue,
+            ),
+      ),
+    );
   }
 
  Widget _createScanButton(BuildContext context) {
     return RaisedButton.icon(
+      focusNode: scanButtonFocus,
       shape: RoundedRectangleBorder(
+        
         borderRadius: BorderRadius.circular(5.0)
 
         ),
@@ -183,26 +210,118 @@ class _HomePageState extends State<HomePage> {
       padding: EdgeInsets.all(10.0),
       color: Colors.blue,
         icon: Icon(Icons.settings_overscan, color: Colors.white),
-        label: Text('Escanear', style: TextStyle(fontSize: 18.0, color: Colors.white),),
-
+        label: Text('Escanear',  style: TextStyle(fontSize: 18.0, color: Colors.white),),
         );
   }
 
+  _enableSaveButton(){
+    if (_descriptionController.text != "" && _priceController.text != "" ){
+      setState((){
+        _isButtonDisabled = false;
+      });
+      return ;
+    } 
+    setState((){
+        _isButtonDisabled = true;
+    });
+  }
  _submit(BuildContext context) async{
-      if( !_formKey.currentState.validate() ) return;
+    if( !_formKey.currentState.validate() ) return;
 
    _formKey.currentState.save();
 
   _productProvider.createProduct(context, product).then((value) {
   if (  value == true ){
-      clearTextInput();
       setState(() {
         product = new ProductModel();
+        _buttonSaveState = 2;
+        scanButtonFocus.requestFocus();
+        clearTextInput();
       });
   }else{
-    //TODO: Show error
+      setState(() {
+        _buttonSaveState = -1;
+      });
   }
 
   });
  }
+
+ _animateButton(){
+   double initialWidth = _buttonKey.currentContext.size.width;
+
+   var controller = AnimationController(duration: Duration(milliseconds: 800), vsync: this);
+
+   _animation = Tween( begin: 0.0, end: 1.0)
+    .animate(controller)
+    ..addListener((){
+     setState(() {
+       _buttonSaveWith = initialWidth - ((initialWidth - 48.0) * _animation.value);
+     });
+    });
+  
+    controller.forward();
+  
+    setState(() {
+      _buttonSaveState = 1;
+    });
+
+    Timer(Duration(milliseconds: 2000),() {
+      setState(() {
+        _buttonSaveState = 0;
+        _buttonSaveWith = initialWidth;
+        _isButtonDisabled = true;
+      });
+     });
+
+     Timer(Duration(milliseconds: 1000), () {
+       setState(() {
+        _animatingReveal = true;
+       });
+    });
+ }
+
+ Widget buildButtonChild(){
+
+  if(_buttonSaveState == -1){
+     return Icon(Icons.error, color: Colors.red);
+   }
+
+   if ( _buttonSaveState == 0){
+     return Text('Guardar', 
+            style: TextStyle(
+              fontSize: 18, 
+              color: Colors.white,
+              )
+          );
+   }
+  
+   if(_buttonSaveState == 1){
+     return SizedBox(
+        height: 25.0,
+        width: 25.0,
+        child: CircularProgressIndicator(
+          value: null,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+        ),
+      );
+   }
+   
+  return Icon(Icons.check, color: Colors.white);
+  
+ }
+
+   double calculateElevation() {
+    if (_animatingReveal) {
+      return 0.0;
+    } else {
+      return _isPressed ? 6.0 : 4.0;
+    }
+  }
+  void reset() {
+    _buttonSaveWith = double.infinity;
+    _animatingReveal = false;
+    _buttonSaveWith = 0;
+  }
+
 }
