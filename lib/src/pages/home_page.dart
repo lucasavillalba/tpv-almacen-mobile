@@ -21,7 +21,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isPressed = false, _animatingReveal = false;
   int _buttonSaveState = 0;
   double _buttonSaveWith = double.infinity;
-  Animation _animation;
   GlobalKey _buttonKey = GlobalKey();
   bool _isButtonDisabled = true;
 
@@ -82,26 +81,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       appBar: AppBar(
         title: Text('Productos'),
       ),
-      body: Center(
-        child: Container(
-          height: MediaQuery.of(context).size.height*0.8,
-          padding: EdgeInsets.symmetric(horizontal: 20.0),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              children: <Widget>[
-                _createBarcode(),
-                _createDescription(),
-                _createPrice(),
-                _createSaveProductButton(context),
-                SizedBox(height: MediaQuery.of(context).size.height*0.32),
-                _createScanButton(context),
-              ],
+      body: Builder(
+        builder: (BuildContext context) {
+          return Center(
+          child: Container(
+            height: MediaQuery.of(context).size.height*0.8,
+            padding: EdgeInsets.symmetric(horizontal: 20.0),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                children: <Widget>[
+                  _createBarcode(),
+                  _createDescription(),
+                  _createPrice(),
+                  _createSaveProductButton(context),
+                  SizedBox(height: MediaQuery.of(context).size.height*0.32),
+                  _createScanButton(context),
+                ],
+              ),
             ),
-          ),
-        )
-      ),
-    );
+          )
+        );
+      }),
+  );
   }
 
   Widget _createBarcode() {
@@ -187,13 +189,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               });
           },
           shape: RoundedRectangleBorder(
-            side: _buttonSaveState == 2 ? BorderSide(color: Colors.green) : _isButtonDisabled == true ? BorderSide(color: Colors.grey[500]) : BorderSide(color: Colors.blue),
+            side: _isButtonDisabled == true ? BorderSide(color: Colors.grey[600]) : BorderSide(color: Colors.blue),
             borderRadius: BorderRadius.circular(5.0)
             ),
           onPressed: _isButtonDisabled == true ? null : () => _submit(context),
           padding: EdgeInsets.all(0.0),
-          color: _buttonSaveState == 2 ? Colors.green : Colors.blue,
-            ),
+          color: _isButtonDisabled == true ? Colors.grey[600] : Colors.blue,
+        ),
       ),
     );
   }
@@ -226,24 +228,72 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
   }
  _submit(BuildContext context) async{
-    if( !_formKey.currentState.validate() ) return;
+
+   // Remove focus from keyboard
+   FocusManager.instance.primaryFocus.unfocus();
+
+   // Validate form
+   if( !_formKey.currentState.validate() ) return;
 
    _formKey.currentState.save();
 
+  // Save product on backend system. Possible returns values are: 
+  // -1: Unable to connect to server
+  //  0: Product was not created
+  //  1: Product created succesfully
+  //  2: Product already exist
   _productProvider.createProduct(context, product).then((value) {
-  if (  value == true ){
-      setState(() {
-        product = new ProductModel();
-        _buttonSaveState = 2;
-        scanButtonFocus.requestFocus();
-        clearTextInput();
-      });
-  }else{
-      setState(() {
-        _buttonSaveState = -1;
-      });
-  }
 
+    switch(value) { 
+      // Unable to connect to server
+      case -1: { 
+         final snackBar = SnackBar( 
+          backgroundColor: Colors.red,
+          content: Text('No se pudo conectar al servidor', textAlign: TextAlign.center),
+        );
+        Scaffold.of(context).showSnackBar(snackBar);
+      } 
+      break; 
+      // Product was not created
+      case 0: { 
+        setState(() {
+          _buttonSaveState = -1;
+        });
+        final snackBar = SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('No fue posible crear el producto', textAlign: TextAlign.center),
+        );
+        Scaffold.of(context).showSnackBar(snackBar);
+      } 
+      break; 
+
+      // Product created succesfully
+      case 1: { 
+        setState(() {
+          product = new ProductModel();
+          _buttonSaveState = 2;
+          scanButtonFocus.requestFocus();
+          clearTextInput();
+        });
+        final snackBar = SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Producto creado correctamente', textAlign: TextAlign.center),
+        );
+        Scaffold.of(context).showSnackBar(snackBar);
+      } 
+      break; 
+      
+      // roduct already exist
+      case 2: { 
+        final snackBar = SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('¡Ya existe el producto escaneado!', textAlign: TextAlign.center),
+        );
+        Scaffold.of(context).showSnackBar(snackBar);
+        clearTextInput();
+      } 
+      break; 
+    } 
   });
  }
 
@@ -252,15 +302,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
    var controller = AnimationController(duration: Duration(milliseconds: 800), vsync: this);
 
-   _animation = Tween( begin: 0.0, end: 1.0)
-    .animate(controller)
-    ..addListener((){
-     setState(() {
-       _buttonSaveWith = initialWidth - ((initialWidth - 48.0) * _animation.value);
-     });
-    });
-  
-    controller.forward();
+   controller.forward();
   
     setState(() {
       _buttonSaveState = 1;
@@ -281,35 +323,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
  }
 
- Widget buildButtonChild(){
-
-  if(_buttonSaveState == -1){
-     return Icon(Icons.error, color: Colors.red);
-   }
-
-   if ( _buttonSaveState == 0){
-     return Text('Guardar', 
-            style: TextStyle(
-              fontSize: 18, 
-              color: Colors.white,
-              )
-          );
-   }
-  
-   if(_buttonSaveState == 1){
-     return SizedBox(
-        height: 25.0,
-        width: 25.0,
-        child: CircularProgressIndicator(
-          value: null,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-        ),
-      );
-   }
-   
-  return Icon(Icons.check, color: Colors.white);
-  
- }
+  Widget buildButtonChild(){
+    return Text('Guardar', 
+              style: TextStyle(
+                fontSize: 18, 
+                color: Colors.white,
+                )
+            );  
+  }
 
    double calculateElevation() {
     if (_animatingReveal) {

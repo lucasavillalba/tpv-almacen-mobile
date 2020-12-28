@@ -1,5 +1,4 @@
 
-import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:dio/dio.dart';
 import 'package:tpv_almacen_barcode_scanner/src/models/product_model.dart';
@@ -10,7 +9,7 @@ class ProductProvider {
   final String _url = 'http://192.168.0.12:8080/products'; 
 
 
- Future<bool> createProduct(BuildContext context, ProductModel product) async {
+ Future<int> createProduct(BuildContext context, ProductModel product) async {
 
     try {
 
@@ -21,21 +20,32 @@ class ProductProvider {
             'salesprice': product.salesprice
           });
 
+      final BaseOptions options = new BaseOptions(method: 'POST', connectTimeout: 3000,sendTimeout: 3000, receiveTimeout: 3000);
 
 
-      Response resp = await Dio().post('$_url', data: formData);
+      //Response resp = await Dio().post('$_url', data: formData, options: options);
 
-      if(resp.statusCode == 201){
-        return true;
+      Dio dio = new Dio(options);
+
+      var resp = await dio.post('$_url', data: formData);
+
+      if(resp.statusCode == 200){
+        if ( resp.data['additional-data']['alreadyexist'] ){
+          return 2; //Product already exist
+        }
+        if ( resp.data['additional-data']['error'] ){
+          return 0; //An error ocurrs in backend system
+        }
       }
+      
+     if (resp.statusCode == 201){
+       return 1; //Product created succesfully
+     }
 
-      //return false;
-      
-    }on Exception catch (e) {
-      
-      print("No se pudo conectar al servidor: "+e.toString());
-      return false;
+     return 0; //An error ocurrs in backend system
+
+    }on DioError catch (e) {
+        return -1;
     }
   }
-
-}
+ }
