@@ -22,9 +22,6 @@ class ProductProvider {
 
       final BaseOptions options = new BaseOptions(method: 'POST', connectTimeout: 3000,sendTimeout: 3000, receiveTimeout: 3000);
 
-
-      //Response resp = await Dio().post('$_url', data: formData, options: options);
-
       Dio dio = new Dio(options);
 
       var resp = await dio.post('$_url', data: formData);
